@@ -3,7 +3,6 @@ import zipfile
 import os
 
 def get_classes_list(path):
-	print(path)
 	if path.endswith(".zip") or path.endswith(".jar"):
 		zipF = zipfile.ZipFile(path, "r")
 		classesList = zipF.namelist()
@@ -53,9 +52,9 @@ class JavaAddImportCommand(sublime_plugin.TextCommand):
 				if is_class_exists(className, name):
 					result = name \
 						.replace("/",".") \
-					    .replace("\\",".") \
-					    .replace(".java","") \
-					    .replace(".class", "")
+						.replace("\\",".") \
+						.replace(".java","") \
+						.replace(".class", "")
 					if result.startswith("."):
 						result = result[1:]
 					results.append(result)
