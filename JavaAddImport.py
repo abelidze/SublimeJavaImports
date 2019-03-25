@@ -3,6 +3,7 @@ import zipfile
 import os
 
 def get_classes_list(path):
+	print(path)
 	if path.endswith(".zip") or path.endswith(".jar"):
 		zipF = zipfile.ZipFile(path, "r")
 		classesList = zipF.namelist()
@@ -11,11 +12,23 @@ def get_classes_list(path):
 	else:
 		classesList = []
 		for root, dirs, files in os.walk(path):
-			for filename in files:
-				classesList.append((root+"/"+filename)[len(path):])
+			for fname in files:
+				if fname.endswith(".zip") or fname.endswith(".jar"):
+					classesList = classesList + get_classes_list(root+"/"+fname)
+				elif fname.endswith(".class") or fname.endswith(".java"):
+					classesList.append((root+"/"+fname)[len(path):])
 		return classesList
 
+def is_class_exists(className, fileName):
+	return fileName.endswith("/"+className+".java") \
+		or fileName.endswith("\\"+className+".java") \
+		or fileName.endswith("/"+className+".class") \
+		or fileName.endswith("\\"+className+".class")
+
 class JavaAddImportCommand(sublime_plugin.TextCommand):
+	classesList = []
+	lastImportPath = []
+
 	def run(self, edit):
 		settings = self.view.settings()
 		if not settings.has("java_import_path"):
@@ -26,15 +39,23 @@ class JavaAddImportCommand(sublime_plugin.TextCommand):
 		if len(settings.get("java_import_path")) == 0:
 			sublime.error_message("You must first define \"java_import_path\" in your settings")
 			return
-		classesList = []
-		for path in settings.get("java_import_path"):
-			classesList = classesList + get_classes_list(path)
+
+		importPath = settings.get("java_import_path")
+		if importPath != self.lastImportPath:
+			self.classesList = []
+			self.lastImportPath = importPath
+			for path in importPath:
+				self.classesList = self.classesList + get_classes_list(path)
 
 		def onDone(className):
 			results = []
-			for name in classesList:
-				if name.endswith("/"+className+".java") or name.endswith("\\"+className+".java") or name.endswith("/"+className+".class") or name.endswith("\\"+className+".class"):
-					result = name.replace("/",".").replace("\\",".").replace(".java","").replace(".class", "")
+			for name in self.classesList:
+				if is_class_exists(className, name):
+					result = name \
+						.replace("/",".") \
+					    .replace("\\",".") \
+					    .replace(".java","") \
+					    .replace(".class", "")
 					if result.startswith("."):
 						result = result[1:]
 					results.append(result)
@@ -61,11 +82,17 @@ class JavaAddImportCommand(sublime_plugin.TextCommand):
 			self.view.window().show_input_panel("Class name: ", "", onDone, None, None)
 
 class JavaAddImportInsertCommand(sublime_plugin.TextCommand):
-		def run(self, edit, classpath):
-			for i in range(0,10000):
-				point = self.view.text_point(i,0)
-				region = self.view.line(point)
-				line = self.view.substr(region)
-				if "import" in line or "class" in line:
-					self.view.insert(edit,point,"import "+classpath+";\n")
-					break
+	def run(self, edit, classpath):
+		for i in range(0, 10000):
+			point = self.view.text_point(i, 0)
+			region = self.view.line(point)
+			line = self.view.substr(region)
+			if len(line) == 0: continue
+
+			if "import" in line:
+				self.view.insert(edit, point, "import "+classpath+";\n")
+				break
+
+			if line[0] == "@" or "class " in line:
+				self.view.insert(edit, point, "import "+classpath+";\n\n")
+				break
